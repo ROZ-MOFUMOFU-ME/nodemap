@@ -1,11 +1,11 @@
 {
     "name": "nodemap",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "description": "cryptocurrency geolocation map",
     "main": "app.js",
     "scripts": {
         "start": "node app.js",
-        "test": "dotenv -e .env.test mocha 'test/**/*.js'"
+        "test": "NODE_ENV=test mocha 'test/*.js'"
     },
     "repository": {
         "type": "git",
@@ -27,7 +27,7 @@
     },
     "homepage": "https://github.com/ROZ-MOFUMOFU-ME/nodemap",
     "dependencies": {
-        "axios": "^1.7.4",
+        "axios": "^1.7.7",
         "bitcoin-core": "^4.2.0",
         "dotenv": "^16.4.5",
         "ejs": "^3.1.10",
@@ -35,9 +35,9 @@
         "node-cache": "^5.1.2"
     },
     "devDependencies": {
-        "chai": "^4.4.1",
+        "chai": "^4.5.0",
         "chai-http": "^4.4.0",
-        "dotenv-cli": "^7.4.1",
-        "mocha": "^10.4.0"
+        "dotenv-cli": "^7.4.2",
+        "mocha": "^10.8.2"
     }
 }
