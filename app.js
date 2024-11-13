@@ -5,12 +5,15 @@ const dotenv = require('dotenv');
 const path = require('path');
 const dns = require('dns').promises;
 const NodeCache = require('node-cache');
+const { format } = require('date-fns');
+const { utcToZonedTime } = require('date-fns-tz');
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 const cache = new NodeCache({ stdTTL: 3600 }); // Setup cache TTL set for 60 minutes
+const cacheRefreshInterval = process.env.CACHE_REFRESH_INTERVAL || 3600000; // Default interval set for 60 minutes
 let lastCacheUpdateTime = null;
 
 const isTestEnv = process.env.NODE_ENV === 'test';
@@ -110,7 +113,7 @@ function isValidIp(ip) {
 // Skip local and private addresses
 function isLocalAddress(ip) {
     return ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(ip) ||
-        ip.startsWith("192.168") || ip.startsWith("10.") || ip.startsWith("fe80:") || (ip.startsWith("172.") && parseInt(ip.split('.')[1], 10) >= 16 && parseInt(ip.split('.')[1], 10) <= 31);
+        ip.startsWith("192.168") || ip.startsWith("10.") || ip.startsWith("fe80:") || ip.startsWith("240d:1e:4f:1b00:") || (ip.startsWith("172.") && parseInt(ip.split('.')[1], 10) >= 16 && parseInt(ip.split('.')[1], 10) <= 31);
 }
 
 // Helper function to extract IP address
@@ -162,11 +165,22 @@ async function getGeoLocation(ip) {
     }
 }
 
+// Fixed DNS lookups for specific IP addresses
+const fixedDnsLookups = {
+    "8.8.8.8": "dns.google",
+    "1.1.1.1": "one.one.one.one"
+};
+
 // Function to performs a reverse DNS lookup
 async function reverseDnsLookup(ip) {
     if (isTestEnv) {
         return mockData.dnsLookup;
     }
+
+    if (fixedDnsLookups[ip]) {
+        return fixedDnsLookups[ip];
+    }
+
     const cacheKey = `dns:${ip}`;
     let data = cache.get(cacheKey);
     if (data) return data;
@@ -250,14 +264,17 @@ async function updatePeerLocations() {
         const combinedLocations = peerLocations.filter(location => location).concat(localAddresses);
         cache.set('peer-locations', combinedLocations);
         const now = new Date();
-        lastCacheUpdateTime = `${now.getFullYear()}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-        console.log(`Peer locations updated and cached at ${lastCacheUpdateTime}.`)
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const zonedTime = utcToZonedTime(now, timeZone);
+        const formatStr = "yyyy/MM/dd HH:mm:ss 'UTC'xx";
+        lastCacheUpdateTime = format(zonedTime, formatStr);
+        console.log(`Peer locations updated and cached at ${lastCacheUpdateTime}.`);
     } catch (error) {
         console.error('Failed to fetch peer locations:', error)
     }
 }
 
-setInterval(updatePeerLocations, 3600000); // Refresh cache every hour
+setInterval(updatePeerLocations, cacheRefreshInterval); // Refresh cache every hour or as defined by CACHE_REFRESH_INTERVAL
 updatePeerLocations(); // Initial fetch and cache when the server starts
 
 // Configure express app and routes...
@@ -302,6 +319,7 @@ app.get('/', (req, res) => {
 // Start the server
 app.listen(port, () => {
     console.log(`Node Map Server running on http://localhost:${port}`);
+    console.log(`Cache refresh interval is set to ${cacheRefreshInterval / 1000 / 60} minutes`);
 });
 
 module.exports = { app, setClient };

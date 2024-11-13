@@ -1,6 +1,6 @@
 {
     "name": "nodemap",
-    "version": "0.2.1",
+    "version": "0.2.2",
     "description": "cryptocurrency geolocation map",
     "main": "app.js",
     "scripts": {
@@ -29,6 +29,7 @@
     "dependencies": {
         "axios": "^1.7.7",
         "bitcoin-core": "^4.2.0",
+        "date-fns-tz": "^2.0.1",
         "dotenv": "^16.4.5",
         "ejs": "^3.1.10",
         "express": "^4.21.1",
