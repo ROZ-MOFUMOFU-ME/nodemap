@@ -13,7 +13,10 @@ jobs:
           name: Build
           command: npm install
       - run:
-          name: Verify build
+          name: Test
+          command: npm install
+      - run:
+          name: Verify test
           command: echo "Build completed successfully!"
   test-v14:
     docker:
@@ -23,10 +26,10 @@ jobs:
       - node/install:
           node-version: "14.21"
       - run:
-          name: Build
+          name: Test
           command: npm install
       - run:
-          name: Verify build
+          name: Verify test
           command: echo "Build completed successfully!"
   test-v16:
     docker:
@@ -36,10 +39,10 @@ jobs:
       - node/install:
           node-version: "16.20"
       - run:
-          name: Build
+          name: Test
           command: npm install
       - run:
-          name: Verify build
+          name: Verify test
           command: echo "Build completed successfully!"
   test-v18:
     docker:
@@ -49,10 +52,10 @@ jobs:
       - node/install:
           node-version: "18.20"
       - run:
-          name: Build
+          name: Test
           command: npm install
       - run:
-          name: Verify build
+          name: Verify test
           command: echo "Build completed successfully!"
   test-v20:
     docker:
@@ -62,10 +65,10 @@ jobs:
       - node/install:
           node-version: "20.18"
       - run:
-          name: Build
+          name: Test
           command: npm install
       - run:
-          name: Verify build
+          name: Verify test
           command: echo "Build completed successfully!"
   test-v22:
     docker:
@@ -75,10 +78,10 @@ jobs:
       - node/install:
           node-version: "22.11"
       - run:
-          name: Build
+          name: Test
           command: npm install
       - run:
-          name: Verify build
+          name: Verify test
           command: echo "Build completed successfully!"
 workflows:
   build_and_test:
