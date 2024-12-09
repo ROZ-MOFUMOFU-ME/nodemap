@@ -5,8 +5,6 @@ const dotenv = require('dotenv');
 const path = require('path');
 const dns = require('dns').promises;
 const NodeCache = require('node-cache');
-const { format } = require('date-fns');
-const { utcToZonedTime } = require('date-fns-tz');
 
 dotenv.config();
 
@@ -225,11 +223,11 @@ async function updatePeerLocations() {
             const geoInfo = await getGeoLocation(ip) || {};
             const dnsLookup = await reverseDnsLookup(ip) || '';
             const orgInfo = formatOrg(geoInfo.org);
-
+            const blocks = "blocks";
             return {
                 ip: ip,
                 userAgent: `${peer.subver}<br><span class="text-light">${peer.version}</span>`,
-                blockHeight: peer.startingheight,
+                blockHeight: `${peer.startingheight.toString()}<br><span class="text-light">${blocks}</span>`,
                 location: geoInfo.loc ? geoInfo.loc.split(',') : '',
                 country: `${geoInfo.country}<br><span class="text-light">${geoInfo.timezone}</span>`,
                 city: `${geoInfo.city}<br><span class="text-light">${geoInfo.region}</span>`,
@@ -247,11 +245,11 @@ async function updatePeerLocations() {
             const geoInfo = await getGeoLocation(ip) || {};
             const dnsLookup = await reverseDnsLookup(ip) || '';
             const orgInfo = formatOrg(geoInfo.org);
-
+            const blocks = "blocks";
             return {
                 ip: ip,
                 userAgent: `${networkInfo.subversion}<br><span class="text-light">${networkInfo.protocolversion}</span>`,
-                blockHeight: miningInfo.blocks,
+                blockHeight: `${miningInfo.blocks.toString()}<br><span class="text-light">${blocks}</span>`,
                 location: geoInfo.loc ? geoInfo.loc.split(',') : '',
                 country: `${geoInfo.country}<br><span class="text-light">${geoInfo.timezone}</span>`,
                 city: `${geoInfo.city}<br><span class="text-light">${geoInfo.region}</span>`,
@@ -264,13 +262,11 @@ async function updatePeerLocations() {
         const combinedLocations = peerLocations.filter(location => location).concat(localAddresses);
         cache.set('peer-locations', combinedLocations);
         const now = new Date();
-        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const zonedTime = utcToZonedTime(now, timeZone);
-        const formatStr = "yyyy/MM/dd HH:mm:ss 'UTC'xx";
-        lastCacheUpdateTime = format(zonedTime, formatStr);
-        console.log(`Peer locations updated and cached at ${lastCacheUpdateTime}.`);
+        lastCacheUpdateTime = now.toISOString();
+
+        console.log(`Peer locations updated and cached at ${now.toLocaleString(undefined, { timeZoneName: 'short' })}`);
     } catch (error) {
-        console.error('Failed to fetch peer locations:', error)
+        console.error('Failed to fetch peer locations:', error);
     }
 }
 
