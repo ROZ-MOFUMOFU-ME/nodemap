@@ -110,8 +110,21 @@ function isValidIp(ip) {
 
 // Skip local and private addresses
 function isLocalAddress(ip) {
-    return ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(ip) ||
-        ip.startsWith("192.168") || ip.startsWith("10.") || ip.startsWith("fe80:") || ip.startsWith("240d:1e:4f:1b00:") || (ip.startsWith("172.") && parseInt(ip.split('.')[1], 10) >= 16 && parseInt(ip.split('.')[1], 10) <= 31);
+    const localAddresses = [
+        "127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"
+    ];
+    const privateAddressPatterns = [
+        /^192\.168\.\d{1,3}\.\d{1,3}$/,
+        /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/,
+        /^172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}$/,
+        /^fe80:/,
+        /^fc00:/,
+        /^fd00:/,
+        /^::1$/,
+        /^::ffff:127\.0\.0\.1$/
+    ];
+    
+    return localAddresses.includes(ip) || privateAddressPatterns.some(pattern => pattern.test(ip));
 }
 
 // Helper function to extract IP address
@@ -165,8 +178,8 @@ async function getGeoLocation(ip) {
 
 // Fixed DNS lookups for specific IP addresses
 const fixedDnsLookups = {
-    "8.8.8.8": "dns.google",
-    "1.1.1.1": "one.one.one.one"
+    '8.8.8.8': 'dns.google',
+    '1.1.1.1': 'one.one.one.one'
 };
 
 // Function to performs a reverse DNS lookup
@@ -234,14 +247,22 @@ async function updatePeerLocations() {
                 org: `${orgInfo.name}<br><span class="text-light">${orgInfo.number}</span>`,
                 dns: dnsLookup
             };
-        }));
-
-        const localAddresses = await Promise.all(networkInfo.localaddresses.map(async addr => {
-            const ip = extractIp(addr.address);
-            if (!isValidIp(ip)) {
-                console.warn('Invalid IP address skipped:', ip);
+        })).then(results => results.filter(location => location !== null));
+        
+        const addrlocalSet = new Set();
+        const localAddresses = await Promise.all(peers.map(async peer => {
+            if (!peer.addrlocal) return null;
+            const ip = extractIp(peer.addrlocal);
+            if (!isValidIp(ip) || isLocalAddress(ip)) {
+                console.warn('Invalid or local IP address skipped:', ip);
                 return null;
             }
+
+            if (addrlocalSet.has(ip)) {
+                return null;
+            }
+            addrlocalSet.add(ip);
+
             const geoInfo = await getGeoLocation(ip) || {};
             const dnsLookup = await reverseDnsLookup(ip) || '';
             const orgInfo = formatOrg(geoInfo.org);
@@ -256,10 +277,9 @@ async function updatePeerLocations() {
                 org: `${orgInfo.name}<br><span class="text-light">${orgInfo.number}</span>`,
                 dns: dnsLookup
             };
-        }));
+        })).then(results => results.filter(location => location !== null));
 
-        // Combine peer locations with local address locations
-        const combinedLocations = peerLocations.filter(location => location).concat(localAddresses);
+        const combinedLocations = [...new Map([...peerLocations, ...localAddresses].map(location => [location.ip, location])).values()];
         cache.set('peer-locations', combinedLocations);
         const now = new Date();
         lastCacheUpdateTime = now.toISOString();

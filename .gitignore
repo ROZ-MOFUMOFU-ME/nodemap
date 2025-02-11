@@ -400,3 +400,7 @@ FodyWeavers.xsd
 # .env
 .env
 .env.test
+
+# new relic
+newrelic_agent.log
+newrelic.js
