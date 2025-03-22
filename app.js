@@ -1,14 +1,32 @@
 const express = require('express');
 const Client = require('bitcoin-core');
 const axios = require('axios');
-const dotenv = require('dotenv');
+const fs = require('fs');
 const path = require('path');
 const dns = require('dns').promises;
 const NodeCache = require('node-cache');
-
-dotenv.config();
-
 const app = express();
+
+function loadEnvVariables() {
+    const envPath = path.join(__dirname, '.env');
+    try {
+        const data = fs.readFileSync(envPath, 'utf8');
+        const lines = data.split('\n');
+        lines.forEach(line => {
+            const trimmedLine = line.trim();
+            if (!trimmedLine || trimmedLine.startsWith('#')) return;
+            const [key, value] = trimmedLine.split('=');
+            if (key && value) {
+                process.env[key.trim()] = value.trim();
+            }
+        });
+        console.log('.env variables loaded successfully');
+    } catch (error) {
+        console.error('Failed to read .env file:', error.message);
+    }
+}
+loadEnvVariables();
+
 const port = process.env.PORT || 3000;
 const cache = new NodeCache({ stdTTL: 3600 }); // Setup cache TTL set for 60 minutes
 const cacheRefreshInterval = process.env.CACHE_REFRESH_INTERVAL || 3600000; // Default interval set for 60 minutes
@@ -37,10 +55,33 @@ function setClient(newClient) {
     client = newClient;
 }
 
+// Helper function to check if a string is a URL
+function isUrl(string) {
+    try {
+        new URL(string);
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
+
+// Helper function to check if a string is an IPv6 address
+function isIPv6(address) {
+    return /^[0-9a-fA-F:]+$/.test(address);
+}
+
+// Function to wrap IPv6 address with brackets or leave URLs intact
+function formatHost(address) {
+    if (isUrl(address)) {
+        return address; // Return as is if it's a URL
+    }
+    return isIPv6(address) ? `[${address}]` : address;
+}
+
 // Initialize client for production environment
 if (!isTestEnv) {
     client = new Client({
-        host: process.env.DAEMON_RPC_HOST,
+        host: formatHost(process.env.DAEMON_RPC_HOST), // Use the new helper function here
         port: process.env.DAEMON_RPC_PORT,
         username: process.env.DAEMON_RPC_USERNAME,
         password: process.env.DAEMON_RPC_PASSWORD,
@@ -49,15 +90,50 @@ if (!isTestEnv) {
     });
 }
 
+console.log("Connecting to Sugarchain RPC:", {
+    host: process.env.DAEMON_RPC_HOST,
+    port: process.env.DAEMON_RPC_PORT,
+    ssl: process.env.DAEMON_RPC_SSL
+});
+console.log(`Connecting to RPC with host: ${formatHost(process.env.DAEMON_RPC_HOST)}, port: ${process.env.DAEMON_RPC_PORT}`);
+
 // Function to retrieve peer information
 async function fetchPeerInfo() {
     if (isTestEnv) {
         return mockData.peerInfo;
     }
+    const protocol = process.env.DAEMON_RPC_SSL === 'true' ? 'https' : 'http';
+    let host = process.env.DAEMON_RPC_HOST;
+    const port = process.env.DAEMON_RPC_PORT;
+
+    // Adjust host to include port if there's no path
+    if (!host.includes('/')) {
+        host = `${host}:${port}`;
+    }
+
+    const rpcUrl = `${protocol}://${host}`;
+    const rpcData = {
+        jsonrpc: '1.0',
+        id: 'curltest',
+        method: 'getpeerinfo',
+        params: []
+    };
+
     try {
-        return await client.command('getpeerinfo');
+        const response = await axios.post(rpcUrl, rpcData, {
+            auth: {
+                username: process.env.DAEMON_RPC_USERNAME,
+                password: process.env.DAEMON_RPC_PASSWORD
+            },
+            headers: {
+                'Content-Type': 'text/plain'
+            }
+        });
+        console.log("Peer info received: ", response.data);
+        return response.data.result;
     } catch (error) {
-        console.error('Error accessing Coin Daemon for getpeerinfo:', error);
+        console.error('Error accessing Coin Daemon for getpeerinfo:', error.message);
+        console.error('Full Error details:', JSON.stringify(error, null, 2));
         return [];
     }
 }
@@ -68,9 +144,11 @@ async function fetchNetworkInfo() {
         return mockData.networkInfo;
     }
     try {
-        return await client.command('getnetworkinfo');
+        const result = await client.command('getnetworkinfo');
+        return result || { localaddresses: [] };
     } catch (error) {
-        console.error('Error accessing Coin Daemon for getnetworkinfo:', error);
+        console.error('Error accessing Coin Daemon for getnetworkinfo:', error.message);
+        console.error('Error details:', JSON.stringify(error, null, 2));
         try {
             const info = await client.command('getinfo');
             return {
@@ -83,7 +161,8 @@ async function fetchNetworkInfo() {
             };
         } catch (fallbackError) {
             console.error('Error accessing Coin Daemon for getinfo:', fallbackError);
-            return {};
+            console.error('Error details:', JSON.stringify(fallbackError, null, 2));
+            return { localaddresses: [] };
         }
     }
 }
@@ -94,9 +173,11 @@ async function fetchMiningInfo() {
         return mockData.miningInfo;
     }
     try {
-        return await client.command('getmininginfo');
+        const result = await client.command('getmininginfo');
+        return result ? result : {};
     } catch (error) {
-        console.error('Error accessing Coin Daemon for getmininginfo:', error);
+        console.error('Error accessing Coin Daemon for getmininginfo:', error.message);
+        console.error('Error details:', JSON.stringify(error, null, 2));
         return {};
     }
 }
@@ -110,21 +191,8 @@ function isValidIp(ip) {
 
 // Skip local and private addresses
 function isLocalAddress(ip) {
-    const localAddresses = [
-        "127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"
-    ];
-    const privateAddressPatterns = [
-        /^192\.168\.\d{1,3}\.\d{1,3}$/,
-        /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/,
-        /^172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}$/,
-        /^fe80:/,
-        /^fc00:/,
-        /^fd00:/,
-        /^::1$/,
-        /^::ffff:127\.0\.0\.1$/
-    ];
-    
-    return localAddresses.includes(ip) || privateAddressPatterns.some(pattern => pattern.test(ip));
+    return ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(ip) ||
+        ip.startsWith("192.168") || ip.startsWith("10.") || ip.startsWith("fe80:") || (ip.startsWith("172.") && parseInt(ip.split('.')[1], 10) >= 16 && parseInt(ip.split('.')[1], 10) <= 31);
 }
 
 // Helper function to extract IP address
@@ -171,15 +239,15 @@ async function getGeoLocation(ip) {
         console.log("API Response: ", response.data);
         return response.data;
     } catch (error) {
-        console.error('Error getting location data for IP:', ip, error);
+        console.error('Error getting location data for IP:', ip, error.message);
         return null;
     }
 }
 
 // Fixed DNS lookups for specific IP addresses
 const fixedDnsLookups = {
-    '8.8.8.8': 'dns.google',
-    '1.1.1.1': 'one.one.one.one'
+    "8.8.8.8": "dns.google",
+    "1.1.1.1": "one.one.one.one",
 };
 
 // Function to performs a reverse DNS lookup
@@ -224,7 +292,11 @@ async function updatePeerLocations() {
         const peers = await fetchPeerInfo();
         const networkInfo = await fetchNetworkInfo();
         const miningInfo = await fetchMiningInfo();
-        if (!peers) return;
+
+        if (!peers || peers.length === 0) {
+            console.warn('No peer information available');
+            return;
+        }
 
         const peerLocations = await Promise.all(peers.map(async peer => {
             const ip = extractIp(peer.addr);
@@ -247,22 +319,14 @@ async function updatePeerLocations() {
                 org: `${orgInfo.name}<br><span class="text-light">${orgInfo.number}</span>`,
                 dns: dnsLookup
             };
-        })).then(results => results.filter(location => location !== null));
-        
-        const addrlocalSet = new Set();
-        const localAddresses = await Promise.all(peers.map(async peer => {
-            if (!peer.addrlocal) return null;
-            const ip = extractIp(peer.addrlocal);
-            if (!isValidIp(ip) || isLocalAddress(ip)) {
-                console.warn('Invalid or local IP address skipped:', ip);
+        }));
+
+        const localAddresses = await Promise.all(networkInfo.localaddresses.map(async addr => {
+            const ip = extractIp(addr.address);
+            if (!isValidIp(ip)) {
+                console.warn('Invalid IP address skipped:', ip);
                 return null;
             }
-
-            if (addrlocalSet.has(ip)) {
-                return null;
-            }
-            addrlocalSet.add(ip);
-
             const geoInfo = await getGeoLocation(ip) || {};
             const dnsLookup = await reverseDnsLookup(ip) || '';
             const orgInfo = formatOrg(geoInfo.org);
@@ -277,16 +341,17 @@ async function updatePeerLocations() {
                 org: `${orgInfo.name}<br><span class="text-light">${orgInfo.number}</span>`,
                 dns: dnsLookup
             };
-        })).then(results => results.filter(location => location !== null));
+        }));
 
-        const combinedLocations = [...new Map([...peerLocations, ...localAddresses].map(location => [location.ip, location])).values()];
+        // Combine peer locations with local address locations
+        const combinedLocations = peerLocations.filter(location => location).concat(localAddresses);
         cache.set('peer-locations', combinedLocations);
         const now = new Date();
         lastCacheUpdateTime = now.toISOString();
 
         console.log(`Peer locations updated and cached at ${now.toLocaleString(undefined, { timeZoneName: 'short' })}`);
     } catch (error) {
-        console.error('Failed to fetch peer locations:', error);
+        console.error('Failed to fetch peer locations:', error.message);
     }
 }
 
@@ -317,7 +382,8 @@ app.get('/peer-locations', async (req, res) => {
             res.status(404).json({ error: 'No data available' });
         }
     } catch (error) {
-        console.error('Error in /peer-locations endpoint:', error);
+        console.error('Error in /peer-locations endpoint:', error.message);
+        console.error('Error details:', JSON.stringify(error, null, 2));
         res.status(500).json({ error: 'Internal server error', details: error.message });
     }
 });
