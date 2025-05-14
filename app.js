@@ -90,7 +90,7 @@ if (!isTestEnv) {
     });
 }
 
-console.log("Connecting to Sugarchain RPC:", {
+console.log("Connecting to Daemon RPC:", {
     host: process.env.DAEMON_RPC_HOST,
     port: process.env.DAEMON_RPC_PORT,
     ssl: process.env.DAEMON_RPC_SSL
