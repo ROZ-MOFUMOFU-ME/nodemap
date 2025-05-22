@@ -400,3 +400,9 @@ FodyWeavers.xsd
 # .env
 .env
 .env.test
+
+# React Native
+Build
+
+# vite
+dist/

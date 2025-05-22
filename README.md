@@ -57,23 +57,29 @@ To install Node Map, follow these steps:
    # IPinfo.io token
    IPINFO_TOKEN=your_ipinfo_token
 
+   # Interval to update data
+   CACHE_REFRESH_INTERVAL=3600000
+
    # Node Map server port
    PORT=3000
+
+   # Vite development server port
+   VITE_DEV_PORT=5173
    ```
    
 ## Using Node Map
 
 To use Node Map, run the following command from the root of the project:
   ```bash
-  node app.js
+  npm run build
   ```
 or
   ```bash
-  npm start
+  npm run start
   ```
 or
   ```bash
-  pm2 start app.js --name nodemap
+  pm2 start npm --name nodemap -- start
   ```
 
 Open your web browser and navigate to `http://localhost:3000` to view nodemap.
@@ -86,7 +92,7 @@ Open your web browser and navigate to `http://localhost:3000` to view nodemap.
        listen                  443 ssl http2;
        listen                  [::]:443 ssl http2;
        server_name             nodemap.exaple.com;
-       root                    /path/to/nodemap/public;
+       root                    /path/to/nodemap/dist;
 
        # SSL
        ssl_certificate         /etc/letsencrypt/live/exaple.com/fullchain.pem;

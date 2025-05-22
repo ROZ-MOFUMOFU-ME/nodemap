@@ -1,11 +1,18 @@
 {
     "name": "nodemap",
-    "version": "0.2.5",
-    "description": "cryptocurrency geolocation map",
-    "main": "app.js",
+    "version": "0.3.0",
+    "description": "cryptocurrency geolocation map with React frontend",
+    "main": "src/server/server.js",
+    "type": "module",
     "scripts": {
-        "start": "node app.js",
-        "test": "NODE_ENV=test mocha 'test/*.js'"
+        "start": "node src/server/server.js",
+        "dev:server": "NODE_ENV=development nodemon src/server/server.js",
+        "dev:client": "vite",
+        "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+        "build": "vite build",
+        "preview": "vite preview",
+        "lint": "eslint .",
+        "test": "NODE_ENV=test mocha --experimental-modules --node-option=experimental-specifier-resolution=node test/*.js"
     },
     "repository": {
         "type": "git",
@@ -18,7 +25,10 @@
         "node",
         "map",
         "node.js",
-        "javascript"
+        "javascript",
+        "bitcoin",
+        "react",
+        "vite"
     ],
     "author": "ROZ",
     "license": "MIT",
@@ -28,15 +38,21 @@
     "homepage": "https://github.com/ROZ-MOFUMOFU-ME/nodemap",
     "dependencies": {
         "axios": "^1.9.0",
-        "bitcoin-core": "^4.2.0",
-        "ejs": "^3.1.10",
-        "express": "^4.21.2",
-        "node-cache": "^5.1.2"
+        "bitcoin-core": "^5.0.0",
+        "express": "^5.1.0",
+        "node-cache": "^5.1.2",
+        "react": "^19.1.0",
+        "react-dom": "^19.1.0",
+        "react-leaflet": "^5.0.0"
     },
     "devDependencies": {
+        "@vitejs/plugin-react": "^4.4.1",
         "chai": "^4.5.0",
         "chai-http": "^4.4.0",
-        "mocha": "^11.4.0"
+        "concurrently": "^9.1.2",
+        "mocha": "^11.4.0",
+        "nodemon": "^3.1.10",
+        "vite": "^6.3.5"
     },
     "engines": {
         "node": ">=16"
