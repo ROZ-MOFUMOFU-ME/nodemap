@@ -1,14 +1,18 @@
 process.env.NODE_ENV = 'test';
 process.env.DAEMON_RPC_HOST = 'dummy-host';
-process.env.IPINFO_TOKEN   = 'dummy-token';
+process.env.IPINFO_TOKEN = 'dummy-token';
+
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 
 const chai = require('chai');
 const chaiHttp = require('chai-http');
-const { app, setClient } = require('../app');
-const mockData = require('./mockData');
+const { expect } = chai;
+
+import { app, setClient } from '../src/server/server.js';
+import mockData from './mockData.js';
 
 chai.use(chaiHttp);
-const expect = chai.expect;
 
 const mockClient = {
     command: async (cmd) => {
@@ -44,8 +48,7 @@ describe('API tests', function() {
     });
 });
 
-after((done) => {
+after(function(done) {
     console.log('All tests done, exiting process.');
     done();
-    process.exit();
 });

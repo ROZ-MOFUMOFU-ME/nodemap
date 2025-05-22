@@ -1,14 +1,20 @@
-const express = require('express');
-const Client = require('bitcoin-core');
-const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
-const dns = require('dns').promises;
-const NodeCache = require('node-cache');
+import fs from 'fs';
+import NodeCache from 'node-cache';
+import axios from 'axios';
+import * as dns from 'dns';
+const dnsPromises = dns.promises;
+import Client from 'bitcoin-core';
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 
 function loadEnvVariables() {
-    const envPath = path.join(__dirname, '.env');
+    const envPath = path.join(__dirname, '../../.env');
     try {
         const data = fs.readFileSync(envPath, 'utf8');
         const lines = data.split('\n');
@@ -25,69 +31,94 @@ function loadEnvVariables() {
         console.error('Failed to read .env file:', error.message);
     }
 }
+
+// Function to validate environment variables
+function validateEnvironmentVars() {
+    const requiredVars = ['DAEMON_RPC_HOST', 'IPINFO_TOKEN'];
+    const missingVars = requiredVars.filter(varName => !process.env[varName]);
+
+    if (missingVars.length) {
+        console.error("Missing required environment variables:", missingVars.join(', '));
+        process.exit(1); // Exit process with error code
+    }
+}
+
+// Load environment variables
 loadEnvVariables();
 
+// Validate environment variables
+validateEnvironmentVars();
+
 const port = process.env.PORT || 3000;
+console.log(`Server will run on port: ${port} (from .env)`);
+
 const cache = new NodeCache({ stdTTL: 3600 }); // Setup cache TTL set for 60 minutes
 const cacheRefreshInterval = process.env.CACHE_REFRESH_INTERVAL || 3600000; // Default interval set for 60 minutes
 let lastCacheUpdateTime = null;
 
 const isTestEnv = process.env.NODE_ENV === 'test';
 
-let client;
+let mockData = null;
+let client = null;
 const ipInfoToken = process.env.IPINFO_TOKEN;
 
 if (isTestEnv) {
-    var mockData = require('./test/mockData');
-}
-
-// Validates essential environment variables are set
-const requiredVars = ['DAEMON_RPC_HOST', 'IPINFO_TOKEN'];
-const missingVars = requiredVars.filter(varName => !process.env[varName]);
-
-if (missingVars.length) {
-    console.log("Missing required environment variables:", missingVars.join(', '));
-    return;
-}
-
-// Function to set the client (for testing purposes)
-function setClient(newClient) {
-    client = newClient;
-}
-
-// Helper function to check if a string is a URL
-function isUrl(string) {
     try {
-        new URL(string);
-        return true;
-    } catch (error) {
-        return false;
+        const mockDataModule = await import('../../test/mockData.js');
+        mockData = mockDataModule.default;
+    } catch (err) {
+        console.error('Error loading mock data:', err);
+        mockData = { 
+            peerInfo: [], 
+            networkInfo: { localaddresses: [] },
+            miningInfo: { blocks: 0 },
+            geoLocation: {},
+            dnsLookup: ''
+        };
     }
 }
 
-// Helper function to check if a string is an IPv6 address
-function isIPv6(address) {
-    return /^[0-9a-fA-F:]+$/.test(address);
-}
+// Format host address to handle IPv6 and other special cases
+function formatHost(host) {
+    if (!host) return 'localhost';
 
-// Function to wrap IPv6 address with brackets or leave URLs intact
-function formatHost(address) {
-    if (isUrl(address)) {
-        return address; // Return as is if it's a URL
+    // Extract host without port
+    if (host.includes(':')) {
+        // Don't process IPv6 addresses incorrectly
+        if (host.includes('[') && host.includes(']')) {
+            return host; // Return IPv6 address as is
+        }
+        // Remove port if included in host string
+        return host.split(':')[0];
     }
-    return isIPv6(address) ? `[${address}]` : address;
+
+    return host;
 }
 
 // Initialize client for production environment
 if (!isTestEnv) {
-    client = new Client({
-        host: formatHost(process.env.DAEMON_RPC_HOST), // Use the new helper function here
-        port: process.env.DAEMON_RPC_PORT,
-        username: process.env.DAEMON_RPC_USERNAME,
-        password: process.env.DAEMON_RPC_PASSWORD,
-        ssl: process.env.DAEMON_RPC_SSL === 'true',
-        timeout: parseInt(process.env.DAEMON_RPC_TIMEOUT || '30000')
-    });
+    try {
+        const rpcHost = process.env.DAEMON_RPC_HOST || 'localhost';
+        const rpcPort = process.env.DAEMON_RPC_PORT || '8332';
+        const rpcSsl = process.env.DAEMON_RPC_SSL === 'true';
+        const rpcUser = process.env.DAEMON_RPC_USERNAME;
+        const rpcPass = process.env.DAEMON_RPC_PASSWORD;
+        
+        const protocol = rpcSsl ? 'https://' : 'http://';
+        
+        console.log(`Connecting to RPC with URL: ${protocol}${rpcHost}:${rpcPort}`);
+        
+        // Correct initialization method for bitcoin-core v5
+        client = new Client({
+            network: 'mainnet',
+            baseUrl: `${protocol}${rpcHost}:${rpcPort}`,
+            username: rpcUser,
+            password: rpcPass,
+            timeout: parseInt(process.env.DAEMON_RPC_TIMEOUT || '30000')
+        });
+    } catch (error) {
+        console.error("Failed to initialize RPC client:", error.message);
+    }
 }
 
 console.log("Connecting to Daemon RPC:", {
@@ -143,25 +174,70 @@ async function fetchNetworkInfo() {
     if (isTestEnv) {
         return mockData.networkInfo;
     }
+    
+    const protocol = process.env.DAEMON_RPC_SSL === 'true' ? 'https' : 'http';
+    let host = process.env.DAEMON_RPC_HOST;
+    const port = process.env.DAEMON_RPC_PORT;
+
+    // Adjust host to include port if there's no path
+    if (!host.includes('/')) {
+        host = `${host}:${port}`;
+    }
+
+    const rpcUrl = `${protocol}://${host}`;
+    const rpcData = {
+        jsonrpc: '1.0',
+        id: 'curltest',
+        method: 'getnetworkinfo',
+        params: []
+    };
+
     try {
-        const result = await client.command('getnetworkinfo');
-        return result || { localaddresses: [] };
+        const response = await axios.post(rpcUrl, rpcData, {
+            auth: {
+                username: process.env.DAEMON_RPC_USERNAME,
+                password: process.env.DAEMON_RPC_PASSWORD
+            },
+            headers: {
+                'Content-Type': 'text/plain'
+            }
+        });
+        console.log("Network info received: ", response.data);
+        return response.data.result || { localaddresses: [] };
     } catch (error) {
         console.error('Error accessing Coin Daemon for getnetworkinfo:', error.message);
         console.error('Error details:', JSON.stringify(error, null, 2));
+        
+        // Try getinfo as fallback
         try {
-            const info = await client.command('getinfo');
+            const infoData = {
+                jsonrpc: '1.0',
+                id: 'curltest',
+                method: 'getinfo',
+                params: []
+            };
+            
+            const infoResponse = await axios.post(rpcUrl, infoData, {
+                auth: {
+                    username: process.env.DAEMON_RPC_USERNAME,
+                    password: process.env.DAEMON_RPC_PASSWORD
+                },
+                headers: {
+                    'Content-Type': 'text/plain'
+                }
+            });
+            
+            const info = infoResponse.data.result || {};
             return {
                 subversion: info.version,
                 protocolversion: info.protocolversion,
                 localaddresses: [{
                     address: info.ip,
-                    port: process.env.DAEMON_RPC_PORT || 8332
+                    port: process.env.DAEMON_RPC_PORT || 8876
                 }],
             };
         } catch (fallbackError) {
-            console.error('Error accessing Coin Daemon for getinfo:', fallbackError);
-            console.error('Error details:', JSON.stringify(fallbackError, null, 2));
+            console.error('Error accessing Coin Daemon for getinfo:', fallbackError.message);
             return { localaddresses: [] };
         }
     }
@@ -172,9 +248,36 @@ async function fetchMiningInfo() {
     if (isTestEnv) {
         return mockData.miningInfo;
     }
+    
+    const protocol = process.env.DAEMON_RPC_SSL === 'true' ? 'https' : 'http';
+    let host = process.env.DAEMON_RPC_HOST;
+    const port = process.env.DAEMON_RPC_PORT;
+
+    // Adjust host to include port if there's no path
+    if (!host.includes('/')) {
+        host = `${host}:${port}`;
+    }
+
+    const rpcUrl = `${protocol}://${host}`;
+    const rpcData = {
+        jsonrpc: '1.0',
+        id: 'curltest',
+        method: 'getmininginfo',
+        params: []
+    };
+
     try {
-        const result = await client.command('getmininginfo');
-        return result ? result : {};
+        const response = await axios.post(rpcUrl, rpcData, {
+            auth: {
+                username: process.env.DAEMON_RPC_USERNAME,
+                password: process.env.DAEMON_RPC_PASSWORD
+            },
+            headers: {
+                'Content-Type': 'text/plain'
+            }
+        });
+        console.log("Mining info received: ", response.data);
+        return response.data.result || {};
     } catch (error) {
         console.error('Error accessing Coin Daemon for getmininginfo:', error.message);
         console.error('Error details:', JSON.stringify(error, null, 2));
@@ -265,11 +368,15 @@ async function reverseDnsLookup(ip) {
     if (data) return data;
 
     try {
-        [hostname] = await dns.reverse(ip);
-        cache.set(cacheKey, hostname);
-        return hostname;
+        const hostnames = await dnsPromises.reverse(ip);
+        if (hostnames && hostnames.length > 0) {
+            cache.set(cacheKey, hostnames[0]);
+            return hostnames[0];
+        }
+        return '';
     } catch (error) {
-        // console.error('Reverse DNS lookup failed for IP:', ip, error);
+        // DNS lookup failed silently
+        cache.set(cacheKey, ''); // Cache empty result to avoid repeated lookups
         return '';
     }
 }
@@ -306,18 +413,20 @@ async function updatePeerLocations() {
             }
 
             const geoInfo = await getGeoLocation(ip) || {};
+            // Get DNS hostname with proper error handling
             const dnsLookup = await reverseDnsLookup(ip) || '';
             const orgInfo = formatOrg(geoInfo.org);
             const blocks = "blocks";
             return {
-                ip: ip,
+                ip: `${ip}`, // Original IP only - DNS will be added in display
+                dnsHostname: dnsLookup, // Store DNS hostname separately
                 userAgent: `${peer.subver}<br><span class="text-light">${peer.version}</span>`,
                 blockHeight: `${peer.startingheight.toString()}<br><span class="text-light">${blocks}</span>`,
                 location: geoInfo.loc ? geoInfo.loc.split(',') : '',
                 country: `${geoInfo.country}<br><span class="text-light">${geoInfo.timezone}</span>`,
                 city: `${geoInfo.city}<br><span class="text-light">${geoInfo.region}</span>`,
                 org: `${orgInfo.name}<br><span class="text-light">${orgInfo.number}</span>`,
-                dns: dnsLookup
+                dns: dnsLookup // Keep for compatibility
             };
         }));
 
@@ -373,7 +482,7 @@ app.get('/peer-locations', async (req, res) => {
             res.json({
                 locations: locations.map(location => ({
                     ...location,
-                    ip: `${location.ip}<br><span class="text-light">${location.dns}</span>`
+                    ip: `${location.ip}<br><span class="text-light">${location.dnsHostname || location.dns || ''}</span>`
                 })),
                 lastUpdated: lastCacheUpdateTime
             });
@@ -388,15 +497,29 @@ app.get('/peer-locations', async (req, res) => {
     }
 });
 
-// Configures static file serving and ejs view engine
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'public'));
-app.use(express.static('public'));
+if (process.env.NODE_ENV !== 'test') {
+    if (process.env.NODE_ENV === 'development') {
+        const viteDevPort = process.env.VITE_DEV_PORT || '5173';
+        console.log(`Running in development mode, Vite handles client rendering on port ${viteDevPort}`);
+        app.use('/', (req, res) => {
+            res.writeHead(302, {
+                'Location': `http://localhost:${viteDevPort}/`
+            });
+            res.end();
+        });
+    } else {
+        app.use(express.static(path.join(__dirname, '../../dist')));
+        app.use('/', (req, res) => {
+            res.sendFile(path.join(__dirname, '../../dist', 'index.html'));
+        });
+    }
+}
 
-// Main page route
-app.get('/', (req, res) => {
-    res.render('index');
-});
+// Export function to set the client variable
+export function setClient(newClient) {
+    client = newClient;
+    console.log('Test client has been set successfully');
+}
 
 // Start the server
 app.listen(port, () => {
@@ -404,10 +527,5 @@ app.listen(port, () => {
     console.log(`Cache refresh interval is set to ${cacheRefreshInterval / 1000 / 60} minutes`);
 });
 
-module.exports = {
-    app,
-    setClient,
-    fetchPeerInfo,
-    fetchNetworkInfo,
-    fetchMiningInfo,
-};
+// Export the remaining functions (setClient is already exported above)
+export { app, fetchPeerInfo, fetchNetworkInfo, fetchMiningInfo };
