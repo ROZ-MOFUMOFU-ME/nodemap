@@ -3,7 +3,7 @@
 [![Node.js CI](https://github.com/ROZ-MOFUMOFU-ME/nodemap/actions/workflows/node.js.yml/badge.svg)](https://github.com/ROZ-MOFUMOFU-ME/nodemap/actions/workflows/node.js.yml)
 [![CircleCI](https://circleci.com/gh/ROZ-MOFUMOFU-ME/nodemap/tree/main.svg?style=svg)](https://circleci.com/gh/ROZ-MOFUMOFU-ME/nodemap/tree/main)
 
-![initial](https://github.com/ROZ-MOFUMOFU-ME/nodemap/assets/35634920/63cfb18c-bf18-4a42-abeb-7c019b7b3aa3)
+![initial](https://github.com/user-attachments/assets/4eef45dc-0e96-4124-813c-abe68551d958)
 
 This project provides a web application for displaying information about cryptocurrency coin daemon nodes using RPC. It visualizes node data on a OpenStreetMap and displays detailed information in a table format. The project is built with Node.js and uses PureCSS for styling.
 
