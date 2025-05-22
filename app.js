@@ -404,4 +404,10 @@ app.listen(port, () => {
     console.log(`Cache refresh interval is set to ${cacheRefreshInterval / 1000 / 60} minutes`);
 });
 
-module.exports = { app, setClient };
+module.exports = {
+    app,
+    setClient,
+    fetchPeerInfo,
+    fetchNetworkInfo,
+    fetchMiningInfo,
+};

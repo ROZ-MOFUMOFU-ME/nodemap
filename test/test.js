@@ -1,3 +1,7 @@
+process.env.NODE_ENV = 'test';
+process.env.DAEMON_RPC_HOST = 'dummy-host';
+process.env.IPINFO_TOKEN   = 'dummy-token';
+
 const chai = require('chai');
 const chaiHttp = require('chai-http');
 const { app, setClient } = require('../app');
