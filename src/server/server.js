@@ -34,6 +34,12 @@ function loadEnvVariables() {
 
 // Function to validate environment variables
 function validateEnvironmentVars() {
+    if (process.env.NODE_ENV === 'test') {
+        process.env.DAEMON_RPC_HOST = process.env.DAEMON_RPC_HOST || 'dummy-host';
+        process.env.IPINFO_TOKEN = process.env.IPINFO_TOKEN || 'dummy-token';
+        return;
+    }
+    
     const requiredVars = ['DAEMON_RPC_HOST', 'IPINFO_TOKEN'];
     const missingVars = requiredVars.filter(varName => !process.env[varName]);
 
