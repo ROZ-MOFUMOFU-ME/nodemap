@@ -176,7 +176,7 @@ Donations for development are greatly appreciated!
 
 [Buy Me a Coffee](https://buymeacoffee.com/emerauda)
 
-BTC: 3C8oCWjVs2sycQcK3ttiPRSKV4AKBhC7xT
+BTC: 3FpbJ5cotwPZQn9fcdZrPv4h72XquzEvez
 
 ETH: 0xc664a0416c23b1b13a18e86cb5fdd1007be375ae
 
