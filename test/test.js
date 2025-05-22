@@ -9,7 +9,7 @@ const chai = require('chai');
 const chaiHttp = require('chai-http');
 const { expect } = chai;
 
-import { app, setClient } from '../src/server/server.js';
+import { app, setClient, startServer, shutdownServer } from '../src/server/server.js';
 import mockData from './mockData.js';
 
 chai.use(chaiHttp);
@@ -30,6 +30,22 @@ setClient(mockClient);
 
 describe('API tests', function() {
     this.timeout(10000);
+    
+    let server;
+    
+    // Start the server before tests
+    before(function() {
+        server = startServer();
+    });
+    
+    // Clean up resources after tests
+    after(function(done) {
+        console.log('All tests done, cleaning up resources...');
+        shutdownServer().then(() => {
+            console.log('Resources cleaned up successfully');
+            done();
+        });
+    });
 
     it('should respond with HTTP status 200', function(done) {
         chai.request(app)

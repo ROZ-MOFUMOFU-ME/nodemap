@@ -470,39 +470,37 @@ async function updatePeerLocations() {
     }
 }
 
-setInterval(updatePeerLocations, cacheRefreshInterval); // Refresh cache every hour or as defined by CACHE_REFRESH_INTERVAL
-updatePeerLocations(); // Initial fetch and cache when the server starts
+// Replace existing setInterval
+let updateInterval;
+let server;
 
-// Configure express app and routes...
-app.get('/peer-locations', async (req, res) => {
-    try {
-        let locations = cache.get('peer-locations');
-        if (!locations) {
-            console.log('No data available in cache, updating peer locations...');
-            await updatePeerLocations();
-            locations = cache.get('peer-locations');
-        }
-
-        if (locations) {
-            console.log('Returning cached locations:', locations);
-            res.json({
-                locations: locations.map(location => ({
-                    ...location,
-                    ip: `${location.ip}<br><span class="text-light">${location.dnsHostname || location.dns || ''}</span>`
-                })),
-                lastUpdated: lastCacheUpdateTime
-            });
-        } else {
-            console.log('No data available after update');
-            res.status(404).json({ error: 'No data available' });
-        }
-    } catch (error) {
-        console.error('Error in /peer-locations endpoint:', error.message);
-        console.error('Error details:', JSON.stringify(error, null, 2));
-        res.status(500).json({ error: 'Internal server error', details: error.message });
+// Store timer in an exportable variable
+function startUpdateInterval() {
+    if (updateInterval) {
+        clearInterval(updateInterval);
     }
+    updateInterval = setInterval(updatePeerLocations, cacheRefreshInterval);
+}
+
+// Load initial data
+updatePeerLocations();
+startUpdateInterval();
+
+app.get('/peer-locations', (req, res) => {
+    const locations = cache.get('peer-locations') || [];
+    res.json({
+        locations: locations.map(loc => {
+            // If DNS hostname is available, add it to the display
+            if (loc.ip && loc.dnsHostname) {
+                loc.ip = `${loc.ip}<br><span class="text-light">${loc.dnsHostname}</span>`;
+            }
+            return loc;
+        }),
+        lastUpdated: lastCacheUpdateTime
+    });
 });
 
+// Configure server startup
 if (process.env.NODE_ENV !== 'test') {
     if (process.env.NODE_ENV === 'development') {
         const viteDevPort = process.env.VITE_DEV_PORT || '5173';
@@ -521,17 +519,58 @@ if (process.env.NODE_ENV !== 'test') {
     }
 }
 
+// API endpoint to serve peer location data
+app.get('/peer-locations', (req, res) => {
+    const locations = cache.get('peer-locations') || [];
+    res.json({
+        locations: locations.map(loc => {
+            // If DNS hostname is available, add it to the display
+            if (loc.ip && loc.dnsHostname) {
+                loc.ip = `${loc.ip}<br><span class="text-light">${loc.dnsHostname}</span>`;
+            }
+            return loc;
+        }),
+        lastUpdated: lastCacheUpdateTime
+    });
+});
+
 // Export function to set the client variable
 export function setClient(newClient) {
     client = newClient;
     console.log('Test client has been set successfully');
 }
 
-// Start the server
-app.listen(port, () => {
-    console.log(`Node Map Server running on http://localhost:${port}`);
-    console.log(`Cache refresh interval is set to ${cacheRefreshInterval / 1000 / 60} minutes`);
-});
+// Store server in an exportable variable
+function startServer() {
+    server = app.listen(port, () => {
+        console.log(`Node Map Server running on http://localhost:${port}`);
+        console.log(`Cache refresh interval is set to ${cacheRefreshInterval / 1000 / 60} minutes`);
+    });
+    return server;
+}
 
-// Export the remaining functions (setClient is already exported above)
-export { app, fetchPeerInfo, fetchNetworkInfo, fetchMiningInfo };
+// Start the server if not in test environment
+if (process.env.NODE_ENV !== 'test') {
+    startServer();
+}
+
+// Export function to shutdown the server
+export function shutdownServer() {
+    return new Promise((resolve) => {
+        if (updateInterval) {
+            clearInterval(updateInterval);
+            updateInterval = null;
+        }
+        if (server) {
+            server.close(() => {
+                console.log('Server shutdown complete');
+                resolve();
+            });
+        } else {
+            resolve();
+        }
+    });
+}
+
+// Export remaining functions
+export { app, fetchPeerInfo, fetchNetworkInfo, fetchMiningInfo, startServer };

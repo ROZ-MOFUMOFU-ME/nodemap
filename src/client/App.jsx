@@ -6,15 +6,30 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState('')
 
   useEffect(() => {
+    fetchLocations()
+  }, [])
+
+  function fetchLocations() {
     fetch('/peer-locations')
-      .then(response => response.json())
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        const contentType = response.headers.get('content-type')
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new TypeError(`Expected JSON, got ${contentType}`)
+        }
+        return response.json()
+      })
       .then(data => {
         setLocations(data.locations || [])
         const lastUpdated = new Date(data.lastUpdated || new Date())
         setLastUpdated(lastUpdated.toLocaleString(undefined, { timeZoneName: 'short' }))
       })
-      .catch(error => console.error('Error fetching data:', error))
-  }, [])
+      .catch(error => {
+        console.error('Error fetching data:', error)
+      })
+  }
 
   return (
     <>
