@@ -412,6 +412,7 @@ async function updatePeerLocations() {
         }
 
         const peerLocations = await Promise.all(peers.map(async peer => {
+            const fullAddr = peer.addr;
             const ip = extractIp(peer.addr);
             if (!isValidIp(ip) || isLocalAddress(ip)) {
                 console.warn('Invalid or local IP address skipped:', ip);
@@ -424,8 +425,8 @@ async function updatePeerLocations() {
             const orgInfo = formatOrg(geoInfo.org);
             const blocks = "blocks";
             return {
-                ip: `${ip}`, // Original IP only - DNS will be added in display
-                dnsHostname: dnsLookup, // Store DNS hostname separately
+                ip: `${fullAddr}`,
+                dnsHostname: dnsLookup,
                 userAgent: `${peer.subver}<br><span class="text-light">${peer.version}</span>`,
                 blockHeight: `${peer.startingheight.toString()}<br><span class="text-light">${blocks}</span>`,
                 location: geoInfo.loc ? geoInfo.loc.split(',') : '',
@@ -437,6 +438,7 @@ async function updatePeerLocations() {
         }));
 
         const localAddresses = await Promise.all(networkInfo.localaddresses.map(async addr => {
+            const fullAddr = addr.address + ':' + (addr.port || process.env.DAEMON_RPC_PORT);
             const ip = extractIp(addr.address);
             if (!isValidIp(ip)) {
                 console.warn('Invalid IP address skipped:', ip);
@@ -447,7 +449,7 @@ async function updatePeerLocations() {
             const orgInfo = formatOrg(geoInfo.org);
             const blocks = "blocks";
             return {
-                ip: ip,
+                ip: fullAddr,
                 userAgent: `${networkInfo.subversion}<br><span class="text-light">${networkInfo.protocolversion}</span>`,
                 blockHeight: `${miningInfo.blocks.toString()}<br><span class="text-light">${blocks}</span>`,
                 location: geoInfo.loc ? geoInfo.loc.split(',') : '',

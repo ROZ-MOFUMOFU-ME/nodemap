@@ -73,7 +73,7 @@ To use Node Map, run the following command from the root of the project:
   ```bash
   npm run build
   ```
-or
+and
   ```bash
   npm run start
   ```
