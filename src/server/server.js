@@ -438,7 +438,7 @@ async function updatePeerLocations() {
         }));
 
         const localAddresses = await Promise.all(networkInfo.localaddresses.map(async addr => {
-            const fullAddr = addr.address + ':' + (addr.port || process.env.DAEMON_RPC_PORT);
+            const fullAddr = addr.address + ':' + addr.port;
             const ip = extractIp(addr.address);
             if (!isValidIp(ip)) {
                 console.warn('Invalid IP address skipped:', ip);
