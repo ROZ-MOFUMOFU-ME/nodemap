@@ -58,8 +58,14 @@ validateEnvironmentVars();
 const port = process.env.PORT || 3000;
 console.log(`Server will run on port: ${port} (from .env)`);
 
-const cache = new NodeCache({ stdTTL: 3600 }); // Setup cache TTL set for 60 minutes
-const cacheRefreshInterval = process.env.CACHE_REFRESH_INTERVAL || 3600000; // Default interval set for 60 minutes
+// Read cache refresh interval from env (in ms), default to 60 minutes
+const cacheRefreshInterval = parseInt(process.env.CACHE_REFRESH_INTERVAL, 10) || 3600000;
+// Determine TTL in seconds: one‐thousandth of the refresh interval, or 3600s if not configured
+const cacheTTL = process.env.CACHE_REFRESH_INTERVAL
+    ? Math.floor(cacheRefreshInterval / 1000)
+    : 3600;
+// Initialize cache with calculated TTL
+const cache = new NodeCache({ stdTTL: cacheTTL });
 let lastCacheUpdateTime = null;
 
 const isTestEnv = process.env.NODE_ENV === 'test';
@@ -369,11 +375,11 @@ async function reverseDnsLookup(ip) {
 
     // Log the original IP address (for debugging)
     console.log(`Performing DNS lookup for IP: ${ip}`);
-    
+
     // Normalize IP address (remove brackets and port number)
     const cleanIp = extractIp(ip);
     console.log(`Normalized IP for DNS lookup: ${cleanIp}`);
-    
+
     // Check fixed DNS lookups
     for (const fixedIp of Object.keys(fixedDnsLookups)) {
         if (fixedIp === cleanIp) {
@@ -381,7 +387,7 @@ async function reverseDnsLookup(ip) {
             return fixedDnsLookups[fixedIp];
         }
     }
-    
+
     // Check cache
     const cacheKey = `dns:${cleanIp}`;
     let data = cache.get(cacheKey);
@@ -467,20 +473,20 @@ async function updatePeerLocations() {
 
             const ip = extractIp(addr.address);
             console.log(`Processing localAddress: ${addr.address}, extracted IP: ${ip}`);
-            
+
             if (!isValidIp(ip)) {
                 console.warn('Invalid IP address skipped:', ip);
                 return null;
             }
-            
+
             // Perform DNS resolution first, then get geoLocation
             const dnsLookup = await reverseDnsLookup(ip) || '';
             console.log(`DNS lookup result for ${ip}: ${dnsLookup}`);
-            
+
             const geoInfo = await getGeoLocation(ip) || {};
             const orgInfo = formatOrg(geoInfo.org);
             const blocks = "blocks";
-            
+
             return {
                 ip: fullAddr,
                 dnsHostname: dnsLookup, // Save DNS hostname as a separate property
