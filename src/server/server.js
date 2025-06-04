@@ -39,7 +39,7 @@ function validateEnvironmentVars() {
         process.env.IPINFO_TOKEN = process.env.IPINFO_TOKEN || 'dummy-token';
         return;
     }
-    
+
     const requiredVars = ['DAEMON_RPC_HOST', 'IPINFO_TOKEN'];
     const missingVars = requiredVars.filter(varName => !process.env[varName]);
 
@@ -74,8 +74,8 @@ if (isTestEnv) {
         mockData = mockDataModule.default;
     } catch (err) {
         console.error('Error loading mock data:', err);
-        mockData = { 
-            peerInfo: [], 
+        mockData = {
+            peerInfo: [],
             networkInfo: { localaddresses: [] },
             miningInfo: { blocks: 0 },
             geoLocation: {},
@@ -109,11 +109,11 @@ if (!isTestEnv) {
         const rpcSsl = process.env.DAEMON_RPC_SSL === 'true';
         const rpcUser = process.env.DAEMON_RPC_USERNAME;
         const rpcPass = process.env.DAEMON_RPC_PASSWORD;
-        
+
         const protocol = rpcSsl ? 'https://' : 'http://';
-        
+
         console.log(`Connecting to RPC with URL: ${protocol}${rpcHost}:${rpcPort}`);
-        
+
         // Correct initialization method for bitcoin-core v5
         client = new Client({
             network: 'mainnet',
@@ -180,7 +180,7 @@ async function fetchNetworkInfo() {
     if (isTestEnv) {
         return mockData.networkInfo;
     }
-    
+
     const protocol = process.env.DAEMON_RPC_SSL === 'true' ? 'https' : 'http';
     let host = process.env.DAEMON_RPC_HOST;
     const port = process.env.DAEMON_RPC_PORT;
@@ -213,7 +213,7 @@ async function fetchNetworkInfo() {
     } catch (error) {
         console.error('Error accessing Coin Daemon for getnetworkinfo:', error.message);
         console.error('Error details:', JSON.stringify(error, null, 2));
-        
+
         // Try getinfo as fallback
         try {
             const infoData = {
@@ -222,7 +222,7 @@ async function fetchNetworkInfo() {
                 method: 'getinfo',
                 params: []
             };
-            
+
             const infoResponse = await axios.post(rpcUrl, infoData, {
                 auth: {
                     username: process.env.DAEMON_RPC_USERNAME,
@@ -232,7 +232,7 @@ async function fetchNetworkInfo() {
                     'Content-Type': 'text/plain'
                 }
             });
-            
+
             const info = infoResponse.data.result || {};
             return {
                 subversion: info.version,
@@ -254,7 +254,7 @@ async function fetchMiningInfo() {
     if (isTestEnv) {
         return mockData.miningInfo;
     }
-    
+
     const protocol = process.env.DAEMON_RPC_SSL === 'true' ? 'https' : 'http';
     let host = process.env.DAEMON_RPC_HOST;
     const port = process.env.DAEMON_RPC_PORT;
@@ -306,21 +306,23 @@ function isLocalAddress(ip) {
 
 // Helper function to extract IP address
 function extractIp(address) {
-    if (address.includes('[')) {
-        // This is for IPv6 addresses enclosed in brackets, typically with a port
+    if (!address) return '';
+    if (address.includes('[') && address.includes(']')) {
         return address.substring(1, address.indexOf(']'));
-    } else if (address.includes(':')) {
-        // Check if it's an IPv6 without brackets or an IPv4 with port
-        const parts = address.split(':');
-        if (parts.length > 2) {
-            // It's an IPv6 address without brackets
-            return address;
-        } else {
-            // It's an IPv4 address with port
-            return parts[0];
+    }
+    else if (address.includes(':') && address.split(':').length === 2) {
+        return address.split(':')[0];
+    }
+    else if (address.includes(':')) {
+        const lastColonIndex = address.lastIndexOf(':');
+        const afterLastColon = address.substring(lastColonIndex + 1);
+
+        if (/^\d+$/.test(afterLastColon) && lastColonIndex > 0) {
+            return address.substring(0, lastColonIndex);
         }
-    } else {
-        // Plain IPv4 address
+        return address;
+    }
+    else {
         return address;
     }
 }
@@ -344,7 +346,7 @@ async function getGeoLocation(ip) {
         const url = `https://ipinfo.io/${encodedIP}?token=${ipInfoToken}`;
         console.log("Requesting URL:", url);
         const response = await axios.get(url);
-        cache.set(cacheKey, data);
+        cache.set(cacheKey, response.data);
         console.log("API Response: ", response.data);
         return response.data;
     } catch (error) {
@@ -365,23 +367,41 @@ async function reverseDnsLookup(ip) {
         return mockData.dnsLookup;
     }
 
-    if (fixedDnsLookups[ip]) {
-        return fixedDnsLookups[ip];
+    // Log the original IP address (for debugging)
+    console.log(`Performing DNS lookup for IP: ${ip}`);
+    
+    // Normalize IP address (remove brackets and port number)
+    const cleanIp = extractIp(ip);
+    console.log(`Normalized IP for DNS lookup: ${cleanIp}`);
+    
+    // Check fixed DNS lookups
+    for (const fixedIp of Object.keys(fixedDnsLookups)) {
+        if (fixedIp === cleanIp) {
+            console.log(`Fixed DNS match found: ${fixedIp} -> ${fixedDnsLookups[fixedIp]}`);
+            return fixedDnsLookups[fixedIp];
+        }
+    }
+    
+    // Check cache
+    const cacheKey = `dns:${cleanIp}`;
+    let data = cache.get(cacheKey);
+    if (data) {
+        console.log(`DNS cache hit for ${cleanIp}: ${data}`);
+        return data;
     }
 
-    const cacheKey = `dns:${ip}`;
-    let data = cache.get(cacheKey);
-    if (data) return data;
-
     try {
-        const hostnames = await dnsPromises.reverse(ip);
+        const hostnames = await dnsPromises.reverse(cleanIp);
         if (hostnames && hostnames.length > 0) {
+            console.log(`DNS lookup successful for ${cleanIp}: ${hostnames[0]}`);
             cache.set(cacheKey, hostnames[0]);
             return hostnames[0];
         }
+        console.log(`No DNS records found for ${cleanIp}`);
         return '';
     } catch (error) {
         // DNS lookup failed silently
+        console.log(`DNS lookup failed for ${cleanIp}: ${error.message}`);
         cache.set(cacheKey, ''); // Cache empty result to avoid repeated lookups
         return '';
     }
@@ -438,18 +458,32 @@ async function updatePeerLocations() {
         }));
 
         const localAddresses = await Promise.all(networkInfo.localaddresses.map(async addr => {
-            const fullAddr = addr.address + ':' + addr.port;
+            let fullAddr;
+            if (addr.address.includes(':')) {
+                fullAddr = `[${addr.address}]:${addr.port}`;
+            } else {
+                fullAddr = `${addr.address}:${addr.port}`;
+            }
+
             const ip = extractIp(addr.address);
+            console.log(`Processing localAddress: ${addr.address}, extracted IP: ${ip}`);
+            
             if (!isValidIp(ip)) {
                 console.warn('Invalid IP address skipped:', ip);
                 return null;
             }
-            const geoInfo = await getGeoLocation(ip) || {};
+            
+            // Perform DNS resolution first, then get geoLocation
             const dnsLookup = await reverseDnsLookup(ip) || '';
+            console.log(`DNS lookup result for ${ip}: ${dnsLookup}`);
+            
+            const geoInfo = await getGeoLocation(ip) || {};
             const orgInfo = formatOrg(geoInfo.org);
             const blocks = "blocks";
+            
             return {
                 ip: fullAddr,
+                dnsHostname: dnsLookup, // Save DNS hostname as a separate property
                 userAgent: `${networkInfo.subversion}<br><span class="text-light">${networkInfo.protocolversion}</span>`,
                 blockHeight: `${miningInfo.blocks.toString()}<br><span class="text-light">${blocks}</span>`,
                 location: geoInfo.loc ? geoInfo.loc.split(',') : '',
