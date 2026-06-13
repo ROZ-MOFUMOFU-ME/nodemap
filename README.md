@@ -66,6 +66,11 @@ To install Node Map, follow these steps:
    # IPinfo.io token
    IPINFO_TOKEN=your_ipinfo_token
 
+   # Reverse-DNS resolvers (comma-separated). Many hosts cannot answer IPv6 PTR
+   # (ip6.arpa) queries, so reverse lookups fall back to these public resolvers.
+   # Leave empty to use only the system resolver.
+   DNS_SERVERS=1.1.1.1,8.8.8.8
+
    # Interval to update data
    CACHE_REFRESH_INTERVAL=3600000
 

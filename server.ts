@@ -325,7 +325,22 @@ const fixedDnsLookups: Record<string, string> = {
   '1.1.1.1': 'one.one.one.one',
 }
 
-// Perform a reverse DNS lookup.
+// Public resolvers used as a fallback for reverse lookups. A host's own resolver
+// frequently cannot answer ip6.arpa (IPv6 PTR) queries — it returns SERVFAIL, or even
+// a misleading NXDOMAIN — which is the usual reason IPv6 hostnames are *always* blank
+// while IPv4 ones resolve fine. These public resolvers answer ip6.arpa reliably (over
+// IPv4 transport). Override with DNS_SERVERS (comma-separated); set it empty to rely on
+// the system resolver alone.
+const fallbackDnsServers = (process.env.DNS_SERVERS ?? '1.1.1.1,8.8.8.8')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+const fallbackResolver = fallbackDnsServers.length > 0 ? new dnsPromises.Resolver() : null
+if (fallbackResolver) fallbackResolver.setServers(fallbackDnsServers)
+
+// Perform a reverse DNS lookup, preferring the system resolver but deferring to the
+// public resolvers above whenever the system one yields nothing — including when it
+// *claims* NXDOMAIN, which a broken ip6.arpa setup does for perfectly valid IPv6 PTRs.
 async function reverseDnsLookup(ip: string): Promise<string> {
   if (isTestEnv) return mockData!.dnsLookup
 
@@ -338,22 +353,41 @@ async function reverseDnsLookup(ip: string): Promise<string> {
   const cached = cache.get<string>(cacheKey)
   if (cached !== undefined) return cached
 
+  // 1) System resolver. Only a positive answer is trusted here; its errors and empty
+  //    results fall through to the public resolver below.
+  let systemCode: string | undefined
   try {
     const hostnames = await dnsPromises.reverse(cleanIp)
-    const hostname = hostnames[0] ?? ''
-    cache.set(cacheKey, hostname)
-    return hostname
+    if (hostnames[0]) {
+      cache.set(cacheKey, hostnames[0])
+      return hostnames[0]
+    }
   } catch (error) {
-    // Only cache a genuine "no PTR record" answer (NXDOMAIN / no data). Transient
-    // failures — timeouts, SERVFAIL, connection refused — must NOT be cached, or a
-    // single hiccup during the start-up burst would blank that address for the whole
-    // cache TTL. IPv6 (ip6.arpa) reverse queries are the usual victims of this, which
-    // is why IPv6 hostnames appeared to "never" resolve.
-    const code = (error as { code?: string }).code
-    if (code === 'ENOTFOUND' || code === 'ENODATA') cache.set(cacheKey, '')
-    console.log(`DNS lookup failed for ${cleanIp}: ${code ?? errMessage(error)}`)
-    return ''
+    systemCode = (error as { code?: string }).code
   }
+
+  // 2) Public resolver — authoritative for both in-addr.arpa and ip6.arpa.
+  if (fallbackResolver) {
+    try {
+      const hostnames = await fallbackResolver.reverse(cleanIp)
+      const hostname = hostnames[0] ?? ''
+      cache.set(cacheKey, hostname)
+      return hostname
+    } catch (error) {
+      // A definitive "no PTR record" is cached; transient failures retry next refresh.
+      const code = (error as { code?: string }).code
+      if (code === 'ENOTFOUND' || code === 'ENODATA') {
+        cache.set(cacheKey, '')
+        return ''
+      }
+      console.log(`DNS reverse failed for ${cleanIp}: ${code ?? errMessage(error)}`)
+      return ''
+    }
+  }
+
+  // No public resolver configured — trust the system resolver's verdict.
+  if (systemCode === 'ENOTFOUND' || systemCode === 'ENODATA') cache.set(cacheKey, '')
+  return ''
 }
 
 // Split the ipinfo "org" string into a company name and AS number.
