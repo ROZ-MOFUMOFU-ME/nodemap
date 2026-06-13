@@ -1,15 +1,22 @@
 # Node Map
-[![Join the chat at https://github.com/ROZ-MOFUMOFU-ME/nodemap/](https://badges.gitter.im/Join%20Chat.svg)](https://matrix.to/#/#nodemap:gitter.im)
-[![Node.js CI](https://github.com/ROZ-MOFUMOFU-ME/nodemap/actions/workflows/node.js.yml/badge.svg)](https://github.com/ROZ-MOFUMOFU-ME/nodemap/actions/workflows/node.js.yml)
-[![CircleCI](https://circleci.com/gh/ROZ-MOFUMOFU-ME/nodemap/tree/main.svg?style=svg)](https://circleci.com/gh/ROZ-MOFUMOFU-ME/nodemap/tree/main)
+
+[![CI](https://img.shields.io/github/actions/workflow/status/ROZ-MOFUMOFU-ME/nodemap/node.js.yml?branch=main&style=flat&logo=githubactions&logoColor=white&label=CI)](https://github.com/ROZ-MOFUMOFU-ME/nodemap/actions/workflows/node.js.yml)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=white)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat&logo=vite&logoColor=white)](https://vite.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=flat&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20-5FA04E?style=flat&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![License](https://img.shields.io/github/license/ROZ-MOFUMOFU-ME/nodemap?style=flat&color=blue)](https://github.com/ROZ-MOFUMOFU-ME/nodemap/blob/main/LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/ROZ-MOFUMOFU-ME/nodemap?style=flat&logo=github&color=yellow)](https://github.com/ROZ-MOFUMOFU-ME/nodemap/stargazers)
 
 ![initial](https://github.com/user-attachments/assets/4eef45dc-0e96-4124-813c-abe68551d958)
 
-This project provides a web application for displaying information about cryptocurrency coin daemon nodes using RPC. It visualizes node data on a OpenStreetMap and displays detailed information in a table format. The project is built with Node.js and uses PureCSS for styling.
+This project provides a web application for displaying information about cryptocurrency coin daemon nodes using RPC. It visualizes node data on an OpenStreetMap and displays detailed information in a table format. The backend is a TypeScript + Express API (run directly with [tsx](https://tsx.is)); the frontend is a React 19 + Vite app styled with Tailwind CSS 4.
 
 ## Features
 
-- Visual representation of coin nodes on a OpenStreetMap.
+- Visual representation of coin nodes on an OpenStreetMap.
+- Light / dark mode toggle (remembers your choice).
 - Node data will be cached for 60 minutes.
 - Detailed table view showing using IPinfo.io:
   - IP address and Hostname (if available)
@@ -22,7 +29,8 @@ This project provides a web application for displaying information about cryptoc
 ## Prerequisites
 
 Before you begin, ensure you have met the following requirements:
-- You have installed Node.js 12+ and npm 6+.
+
+- You have installed Node.js 20+ and npm 10+.
 - You have a basic understanding of JavaScript and Node.js.
 - You have a cryptocurrency daemon node can accessible via RPC.
 - You have a IPinfo.io token or something else.
@@ -44,8 +52,9 @@ To install Node Map, follow these steps:
    ```bash
    npm install
    ```
-4. Add RPC Client Settings and IPinfo token and Google Maps API Key to the `.env` file:
-   ```app.js
+4. Add RPC client settings and your IPinfo token to the `.env` file:
+
+   ```ini
    # RPC server settings
    DAEMON_RPC_HOST=127.0.0.1
    DAEMON_RPC_PORT=8333
@@ -66,76 +75,112 @@ To install Node Map, follow these steps:
    # Vite development server port
    VITE_DEV_PORT=5173
    ```
-   
+
 ## Using Node Map
 
 To use Node Map, run the following command from the root of the project:
-  ```bash
-  npm run build
-  ```
+
+```bash
+npm run build
+```
+
 and
-  ```bash
-  npm run start
-  ```
+
+```bash
+npm run start
+```
+
 or
-  ```bash
-  pm2 start npm --name nodemap -- start
-  ```
+
+```bash
+pm2 start npm --name nodemap -- start
+```
 
 Open your web browser and navigate to `http://localhost:3000` to view nodemap.
 
+## Customizing the site
+
+All user-facing text and branding lives in a single top-level file: [`site.config.ts`](site.config.ts).
+Edit it to change the page headings, the table column labels, the map defaults, and every
+part of the footer (links, social icons, GitHub star button, and donation addresses) — there is
+no need to dig through the React components. After editing, run `npm run build` (production) or
+just save while `npm run dev` is running and the page hot-reloads.
+
+## Project layout & scripts
+
+The backend and frontend are no longer split across `src/server` and `src/client`:
+
+- `server.ts` — the Express API (run with `tsx`, no build step).
+- `src/` — the React + Vite client (`main.tsx`, `App.tsx`, `index.css`).
+- `site.config.ts` — shared, user-editable site configuration.
+- `test/` — Vitest tests (run against the API with supertest).
+
+| Script              | Description                                        |
+| ------------------- | -------------------------------------------------- |
+| `npm run dev`       | Run the API (`tsx watch`) and the Vite dev server. |
+| `npm run build`     | Build the production client into `dist/`.          |
+| `npm run start`     | Serve the built client + API (`tsx server.ts`).    |
+| `npm run typecheck` | Type-check the whole project with `tsc --noEmit`.  |
+| `npm run lint`      | Lint with ESLint 10 + typescript-eslint.           |
+| `npm run format`    | Format the project with Prettier.                  |
+| `npm test`          | Run the Vitest suite.                              |
+
 ## Publish on the Internet
 
-### Set up reverse proxy and wev server e.g. Nginx
-   ```nginx.conf
-   server {
-       listen                  443 ssl http2;
-       listen                  [::]:443 ssl http2;
-       server_name             nodemap.exaple.com;
-       root                    /path/to/nodemap/dist;
+### Set up reverse proxy and web server e.g. Nginx
 
-       # SSL
-       ssl_certificate         /etc/letsencrypt/live/exaple.com/fullchain.pem;
-       ssl_certificate_key     /etc/letsencrypt/live/exaple.com/privkey.pem;
-       ssl_trusted_certificate /etc/letsencrypt/live/exaple.com/chain.pem;
+```nginx.conf
+server {
+    listen                  443 ssl http2;
+    listen                  [::]:443 ssl http2;
+    server_name             nodemap.example.com;
+    root                    /path/to/nodemap/dist;
 
-       # logging
-       access_log              /var/log/nginx/access.log combined buffer=512k flush=1m;
-       error_log               /var/log/nginx/error.log warn;
+    # SSL
+    ssl_certificate         /etc/letsencrypt/live/example.com/fullchain.pem;
+    ssl_certificate_key     /etc/letsencrypt/live/example.com/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/example.com/chain.pem;
 
-       # reverse proxy
-       location / {
-           proxy_pass                         http://127.0.0.1:3000;
-           proxy_set_header Host              $host;
-           proxy_http_version                 1.1;
-           proxy_cache_bypass                 $http_upgrade;
+    # logging
+    access_log              /var/log/nginx/access.log combined buffer=512k flush=1m;
+    error_log               /var/log/nginx/error.log warn;
 
-           # Proxy SSL
-           proxy_ssl_server_name              on;
+    # reverse proxy
+    location / {
+        proxy_pass                         http://127.0.0.1:3000;
+        proxy_set_header Host              $host;
+        proxy_http_version                 1.1;
+        proxy_cache_bypass                 $http_upgrade;
 
-           # Proxy headers
-           proxy_set_header Upgrade           $http_upgrade;
-           proxy_set_header Connection        $connection_upgrade;
-           proxy_set_header X-Real-IP         $remote_addr;
-           proxy_set_header Forwarded         $proxy_add_forwarded;
-           proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-           proxy_set_header X-Forwarded-Proto $scheme;
-           proxy_set_header X-Forwarded-Host  $host;
-           proxy_set_header X-Forwarded-Port  $server_port;
+        # Proxy SSL
+        proxy_ssl_server_name              on;
 
-           # Proxy timeouts
-           proxy_connect_timeout              60s;
-           proxy_send_timeout                 60s;
-           proxy_read_timeout                 60s;
-       }      
-   ```
+        # Proxy headers
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        $connection_upgrade;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header Forwarded         $proxy_add_forwarded;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_set_header X-Forwarded-Port  $server_port;
+
+        # Proxy timeouts
+        proxy_connect_timeout              60s;
+        proxy_send_timeout                 60s;
+        proxy_read_timeout                 60s;
+    }
+```
+
 [nginxconfig.io](https://www.digitalocean.com/community/tools/nginx) This site is useful to setup Nginx!
 
 ### start reverse proxy and web server
-   ```
-   sudo systemctl start nginx
-   sudo systemctl enable nginx
-   ```
+
+```
+sudo systemctl start nginx
+sudo systemctl enable nginx
+```
+
 Accessing example.com will show nodemap.
 
 ## Contributing to Node Map
@@ -164,9 +209,9 @@ Project Link: [https://github.com/ROZ-MOFUMOFU-ME/nodemap](https://github.com/RO
 
 ## Credits
 
-* [ROZ](https://github.com/ROZ-MOFUMOFU-ME) - Author
+- [ROZ](https://github.com/ROZ-MOFUMOFU-ME) - Author
 
-* [Aoi Emerauda](https://github.com/emerauda) - Alternative
+- [Aoi Emerauda](https://github.com/emerauda) - Alternative
 
 ## Donations
 

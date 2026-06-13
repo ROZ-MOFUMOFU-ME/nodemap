@@ -1,0 +1,29 @@
+@import 'tailwindcss';
+
+/* Enable a manual (class-based) dark mode toggled on <html class="dark">,
+   instead of Tailwind v4's default prefers-color-scheme behaviour. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  font-family: 'Quicksand', sans-serif;
+}
+
+body {
+  margin: 0 auto;
+  padding: 0;
+}
+
+/* Styling for HTML fragments injected by the server via dangerouslySetInnerHTML
+   (e.g. the muted secondary line under each table cell). */
+.text-light {
+  color: #6b7280;
+}
+
+.dark .text-light {
+  color: #9ca3af;
+}
+
+/* Darken the map's empty/background area in dark mode so dark tiles blend in. */
+.dark .leaflet-container {
+  background: #1a1a1a;
+}
