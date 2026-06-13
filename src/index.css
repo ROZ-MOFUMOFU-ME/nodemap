@@ -8,6 +8,17 @@
   font-family: 'Quicksand', sans-serif;
 }
 
+/* Paint the whole viewport canvas, not just the centred max-w-[1440px] container.
+   Without this the body/html stayed browser-default white, so on wide screens the
+   gutters beside the content (and the overscroll area) showed white in dark mode. */
+html {
+  background-color: var(--color-neutral-100);
+}
+
+html.dark {
+  background-color: var(--color-neutral-900);
+}
+
 body {
   margin: 0 auto;
   padding: 0;
