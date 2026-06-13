@@ -1,6 +1,6 @@
 {
   "name": "nodemap",
-  "version": "0.5.0-rc.1",
+  "version": "0.5.0",
   "description": "cryptocurrency geolocation map with a React + TypeScript frontend",
   "main": "server.ts",
   "type": "module",

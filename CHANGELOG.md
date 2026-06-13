@@ -4,9 +4,9 @@ All notable changes to this project are documented in this file. The format is b
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [0.5.0-rc.1] - 2026-06-13
+## [0.5.0] - 2026-06-13
 
-First pre-release of the modernised stack.
+First stable release of the modernised stack.
 
 ### Changed
 
@@ -23,18 +23,22 @@ First pre-release of the modernised stack.
 - Light / dark mode toggle (persisted, no flash on load) with dark map tiles
   (CARTO Dark Matter) that follow the theme.
 - `DNS_SERVERS` env var: reverse lookups fall back to public resolvers (default
-  `1.1.1.1,8.8.8.8`) when the host's own resolver can't answer IPv6 `ip6.arpa` PTR
-  queries.
-- `dnsOverrides` in `site.config.ts`: force the reverse-DNS hostname of specific
-  IPv4/IPv6 addresses. IPv6 matching ignores case, leading zeros and `::` compression.
+  `1.1.1.1,8.8.8.8`) when the host's own resolver can't answer IPv6 `ip6.arpa` PTR queries.
+- `dnsOverrides` in `site.config.ts`: force the reverse-DNS hostname of specific IPv4/IPv6
+  addresses. IPv6 matching ignores case, leading zeros and `::` compression.
 - Map marker pin configurable from `site.config.ts`.
+- `.nvmrc` to pin the local Node version, and a `CLAUDE.md` for AI-assisted development.
+
+### Removed
+
+- CircleCI config — CI now runs solely on GitHub Actions (Node 20 / 22 / 24).
 
 ### Fixed
 
-- IPv6 reverse DNS: `[v6]:port` addresses are unwrapped correctly and bare IPv6 is no
-  longer corrupted, so PTR hostnames resolve. Transient resolver failures are no longer
-  cached as permanent empty results, and lookups are bounded in concurrency.
-- Dark mode now paints the whole viewport, not just the centred container — wide screens
-  are no longer white at the sides.
+- IPv6 reverse DNS: `[v6]:port` addresses are unwrapped correctly and bare IPv6 is no longer
+  corrupted, so PTR hostnames resolve. Transient resolver failures are no longer cached as
+  permanent empty results, and lookups are bounded in concurrency.
+- Dark mode now paints the whole viewport, not just the centred container — wide screens are
+  no longer white at the sides.
 
-[0.5.0-rc.1]: https://github.com/ROZ-MOFUMOFU-ME/nodemap/releases/tag/v0.5.0-rc.1
+[0.5.0]: https://github.com/ROZ-MOFUMOFU-ME/nodemap/releases/tag/v0.5.0
