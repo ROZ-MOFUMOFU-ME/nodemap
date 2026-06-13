@@ -43,6 +43,7 @@ interface GeoLocation {
   region?: string
   timezone?: string
   org?: string
+  hostname?: string
 }
 
 interface NodeLocation {
@@ -343,8 +344,14 @@ async function reverseDnsLookup(ip: string): Promise<string> {
     cache.set(cacheKey, hostname)
     return hostname
   } catch (error) {
-    console.log(`DNS lookup failed for ${cleanIp}: ${errMessage(error)}`)
-    cache.set(cacheKey, '') // Cache the empty result to avoid repeated lookups.
+    // Only cache a genuine "no PTR record" answer (NXDOMAIN / no data). Transient
+    // failures — timeouts, SERVFAIL, connection refused — must NOT be cached, or a
+    // single hiccup during the start-up burst would blank that address for the whole
+    // cache TTL. IPv6 (ip6.arpa) reverse queries are the usual victims of this, which
+    // is why IPv6 hostnames appeared to "never" resolve.
+    const code = (error as { code?: string }).code
+    if (code === 'ENOTFOUND' || code === 'ENODATA') cache.set(cacheKey, '')
+    console.log(`DNS lookup failed for ${cleanIp}: ${code ?? errMessage(error)}`)
     return ''
   }
 }
@@ -360,6 +367,32 @@ function formatOrg(org: string | undefined): { name: string; number: string } {
 // ----------------------------------------------------------------------------
 // Data refresh
 // ----------------------------------------------------------------------------
+
+// Cap how many peers we resolve at once. Firing hundreds of simultaneous reverse-DNS
+// (and geo) lookups overwhelms the resolver, so queries time out — and a timed-out
+// IPv6 lookup is exactly what used to get cached as an empty hostname.
+const PEER_LOOKUP_CONCURRENCY = 16
+
+// Like Promise.all(items.map(fn)) but with a bounded number of in-flight tasks,
+// preserving input order in the result array.
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let next = 0
+  async function worker(): Promise<void> {
+    while (next < items.length) {
+      const i = next++
+      results[i] = await fn(items[i])
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker())
+  await Promise.all(workers)
+  return results
+}
+
 async function updatePeerLocations(): Promise<void> {
   try {
     const peers = await fetchPeerInfo()
@@ -371,8 +404,10 @@ async function updatePeerLocations(): Promise<void> {
       return
     }
 
-    const peerLocations = await Promise.all(
-      peers.map(async (peer): Promise<NodeLocation | null> => {
+    const peerLocations = await mapWithConcurrency(
+      peers,
+      PEER_LOOKUP_CONCURRENCY,
+      async (peer): Promise<NodeLocation | null> => {
         const fullAddr = peer.addr
         const ip = extractIp(peer.addr)
         if (!isValidIp(ip) || isLocalAddress(ip)) {
@@ -381,24 +416,27 @@ async function updatePeerLocations(): Promise<void> {
         }
 
         const geoInfo = (await getGeoLocation(ip)) ?? {}
-        const dnsLookup = (await reverseDnsLookup(ip)) || ''
+        // Prefer the PTR record; fall back to the hostname ipinfo.io reports (if any).
+        const hostname = (await reverseDnsLookup(ip)) || geoInfo.hostname || ''
         const orgInfo = formatOrg(geoInfo.org)
         return {
           ip: fullAddr,
-          dnsHostname: dnsLookup,
+          dnsHostname: hostname,
           userAgent: `${peer.subver}<br><span class="text-light">${peer.version}</span>`,
           blockHeight: `${peer.startingheight}<br><span class="text-light">blocks</span>`,
           location: geoInfo.loc ? geoInfo.loc.split(',') : '',
           country: `${geoInfo.country}<br><span class="text-light">${geoInfo.timezone}</span>`,
           city: `${geoInfo.city}<br><span class="text-light">${geoInfo.region}</span>`,
           org: `${orgInfo.name}<br><span class="text-light">${orgInfo.number}</span>`,
-          dns: dnsLookup,
+          dns: hostname,
         }
-      }),
+      },
     )
 
-    const localAddresses = await Promise.all(
-      networkInfo.localaddresses.map(async (addr): Promise<NodeLocation | null> => {
+    const localAddresses = await mapWithConcurrency(
+      networkInfo.localaddresses,
+      PEER_LOOKUP_CONCURRENCY,
+      async (addr): Promise<NodeLocation | null> => {
         const fullAddr = addr.address.includes(':')
           ? `[${addr.address}]:${addr.port}`
           : `${addr.address}:${addr.port}`
@@ -409,21 +447,21 @@ async function updatePeerLocations(): Promise<void> {
           return null
         }
 
-        const dnsLookup = (await reverseDnsLookup(ip)) || ''
         const geoInfo = (await getGeoLocation(ip)) ?? {}
+        const hostname = (await reverseDnsLookup(ip)) || geoInfo.hostname || ''
         const orgInfo = formatOrg(geoInfo.org)
         return {
           ip: fullAddr,
-          dnsHostname: dnsLookup,
+          dnsHostname: hostname,
           userAgent: `${networkInfo.subversion}<br><span class="text-light">${networkInfo.protocolversion}</span>`,
           blockHeight: `${miningInfo.blocks}<br><span class="text-light">blocks</span>`,
           location: geoInfo.loc ? geoInfo.loc.split(',') : '',
           country: `${geoInfo.country}<br><span class="text-light">${geoInfo.timezone}</span>`,
           city: `${geoInfo.city}<br><span class="text-light">${geoInfo.region}</span>`,
           org: `${orgInfo.name}<br><span class="text-light">${orgInfo.number}</span>`,
-          dns: dnsLookup,
+          dns: hostname,
         }
-      }),
+      },
     )
 
     const combinedLocations = [...peerLocations, ...localAddresses].filter(
@@ -522,4 +560,5 @@ export {
   shutdownServer,
   extractIp,
   reverseDnsLookup,
+  updatePeerLocations,
 }

@@ -6,6 +6,20 @@ const mockData = {
       version: '70015',
       startingheight: 123456,
     },
+    {
+      // Bracketed IPv6 with a port — its reverse-DNS hostname must reach the table.
+      addr: '[2001:db8::1234]:8333',
+      subver: '/Satoshi:0.21.0/',
+      version: '70016',
+      startingheight: 123457,
+    },
+    {
+      // IPv4 with a port — its reverse-DNS hostname must reach the table.
+      addr: '203.0.113.5:8333',
+      subver: '/Satoshi:0.21.0/',
+      version: '70016',
+      startingheight: 123458,
+    },
   ],
   networkInfo: {
     subversion: '/Satoshi:0.19.0.1/',
