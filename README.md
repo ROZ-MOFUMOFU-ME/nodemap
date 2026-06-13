@@ -17,6 +17,8 @@ This project provides a web application for displaying information about cryptoc
 
 - Visual representation of coin nodes on an OpenStreetMap.
 - Light / dark mode toggle (remembers your choice).
+- Reverse-DNS hostnames with a public-resolver fallback for IPv6 (`ip6.arpa`), plus
+  per-address PTR overrides — all configurable in `site.config.ts`.
 - Node data will be cached for 60 minutes.
 - Detailed table view showing using IPinfo.io:
   - IP address and Hostname (if available)
