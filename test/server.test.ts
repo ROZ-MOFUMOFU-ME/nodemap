@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import request from 'supertest'
-import { app, extractIp, shutdownServer, updatePeerLocations } from '../server'
+import { app, extractIp, reverseDnsLookup, shutdownServer, updatePeerLocations } from '../server'
 
 afterAll(async () => {
   await shutdownServer()
@@ -40,6 +40,24 @@ describe('GET /peer-locations reverse DNS', () => {
     const ipv4 = ips.find((ip) => ip.includes('203.0.113.5'))
     expect(ipv4).toBeDefined()
     expect(ipv4).toContain('test-dns')
+  })
+})
+
+describe('reverseDnsLookup PTR overrides (site.config.ts)', () => {
+  it('applies an IPv4 override', async () => {
+    expect(await reverseDnsLookup('1.1.1.1')).toBe('one.one.one.one')
+  })
+
+  it('applies an IPv6 override regardless of case / zero-compression / brackets', async () => {
+    // site.config maps 2606:4700:4700::1111 -> one.one.one.one
+    expect(await reverseDnsLookup('2606:4700:4700::1111')).toBe('one.one.one.one')
+    expect(await reverseDnsLookup('2606:4700:4700:0:0:0:0:1111')).toBe('one.one.one.one')
+    expect(await reverseDnsLookup('[2606:4700:4700::1111]:8333')).toBe('one.one.one.one')
+  })
+
+  it('falls through for addresses without an override', async () => {
+    // In the test environment, non-overridden lookups return the mock hostname.
+    expect(await reverseDnsLookup('203.0.113.5')).toBe('test-dns')
   })
 })
 

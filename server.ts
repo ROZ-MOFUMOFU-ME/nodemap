@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import * as dns from 'node:dns'
 import NodeCache from 'node-cache'
 import express, { type Request, type Response } from 'express'
+import config from './site.config'
 
 const dnsPromises = dns.promises
 const __filename = fileURLToPath(import.meta.url)
@@ -320,10 +321,24 @@ async function getGeoLocation(ip: string): Promise<GeoLocation | null> {
   }
 }
 
-const fixedDnsLookups: Record<string, string> = {
-  '8.8.8.8': 'dns.google',
-  '1.1.1.1': 'one.one.one.one',
+// Normalize an IP for override matching: lowercase, and for IPv6 collapse formatting
+// differences (leading zeros, "::" compression) to a canonical form via the URL parser,
+// so an override written "2001:4860:4860:0:0:0:0:8888" still matches "2001:4860:4860::8888"
+// as reported by the daemon.
+function normalizeIp(ip: string): string {
+  if (!ip.includes(':')) return ip.toLowerCase()
+  try {
+    return new URL(`http://[${ip}]/`).hostname.replace(/^\[|\]$/g, '')
+  } catch {
+    return ip.toLowerCase()
+  }
 }
+
+// Reverse-DNS (PTR) overrides from site.config.ts, keyed by normalized IP so IPv4/IPv6
+// matching ignores case and IPv6 formatting differences. See the config for the format.
+const dnsOverrides: Record<string, string> = Object.fromEntries(
+  Object.entries(config.dnsOverrides).map(([ip, host]) => [normalizeIp(ip), host]),
+)
 
 // Public resolvers used as a fallback for reverse lookups. A host's own resolver
 // frequently cannot answer ip6.arpa (IPv6 PTR) queries — it returns SERVFAIL, or even
@@ -342,12 +357,14 @@ if (fallbackResolver) fallbackResolver.setServers(fallbackDnsServers)
 // public resolvers above whenever the system one yields nothing — including when it
 // *claims* NXDOMAIN, which a broken ip6.arpa setup does for perfectly valid IPv6 PTRs.
 async function reverseDnsLookup(ip: string): Promise<string> {
-  if (isTestEnv) return mockData!.dnsLookup
-
-  // Normalize (strip brackets and any port) before the PTR query.
+  // Normalize (strip brackets and any port) before checking overrides / querying.
   const cleanIp = extractIp(ip)
 
-  if (fixedDnsLookups[cleanIp]) return fixedDnsLookups[cleanIp]
+  // Config-driven PTR overrides take precedence over everything (even the test mock).
+  const override = dnsOverrides[normalizeIp(cleanIp)]
+  if (override) return override
+
+  if (isTestEnv) return mockData!.dnsLookup
 
   const cacheKey = `dns:${cleanIp}`
   const cached = cache.get<string>(cacheKey)

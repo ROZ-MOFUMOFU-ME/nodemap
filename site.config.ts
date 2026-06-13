@@ -50,6 +50,13 @@ export interface SiteConfig {
     githubStar: { user: string; repo: string } | null
     donations: Donation[]
   }
+  /**
+   * Reverse-DNS (PTR) overrides for specific IP addresses — force a hostname for an
+   * address that has none, or show a friendlier name. Keys are the bare IP as shown in
+   * the table (IPv4 or IPv6, no brackets or port). Matching ignores case and IPv6
+   * formatting differences (leading zeros / "::" compression).
+   */
+  dnsOverrides: Record<string, string>
 }
 
 const siteConfig: SiteConfig = {
@@ -115,6 +122,16 @@ const siteConfig: SiteConfig = {
       { coin: 'ETC', address: '0xc664a0416c23b1b13a18e86cb5fdd1007be375ae' },
       { coin: 'MONA', address: 'MLEqE3vi11j4ZguMjkvMn5rUtze6kXbAzQ' },
     ],
+  },
+
+  // Reverse-DNS (PTR) overrides. Key = bare IP (IPv4 or IPv6) as shown in the table,
+  // value = the hostname to display. Handy for addresses that have no PTR record.
+  dnsOverrides: {
+    '8.8.8.8': 'dns.google',
+    '1.1.1.1': 'one.one.one.one',
+    // IPv6 works too — write it in any valid form (case and "::" compression ignored):
+    '2001:4860:4860::8888': 'dns.google',
+    '2606:4700:4700::1111': 'one.one.one.one',
   },
 }
 

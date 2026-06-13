@@ -108,7 +108,8 @@ Open your web browser and navigate to `http://localhost:3000` to view nodemap.
 All user-facing text and branding lives in a single top-level file: [`site.config.ts`](site.config.ts).
 Edit it to change the page headings, the table column labels, the map defaults, and every
 part of the footer (links, social icons, GitHub star button, and donation addresses) — there is
-no need to dig through the React components. After editing, run `npm run build` (production) or
+no need to dig through the React components. It also holds `dnsOverrides`, a map for forcing the
+reverse-DNS (PTR) hostname of specific IPv4/IPv6 addresses (handy for nodes with no PTR record). After editing, run `npm run build` (production) or
 just save while `npm run dev` is running and the page hot-reloads.
 
 ## Project layout & scripts
